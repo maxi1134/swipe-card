@@ -399,6 +399,16 @@ class SwipeCard extends LitElement {
     if (buildId !== this._buildId) {
       return;
     }
+    // hass/preview may have been assigned while the cards were being
+    // built (and the forwarding setters saw an empty list) — re-apply.
+    cards.forEach((element) => {
+      if (this._hass) {
+        element.hass = this._hass;
+      }
+      if (element.localName === "hui-card") {
+        element.preview = this.preview ?? false;
+      }
+    });
     this._cards = cards;
     if (this._ro) {
       this._cards.forEach((card) => {
