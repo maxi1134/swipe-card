@@ -1,39 +1,21 @@
-# Lovelace swipe card
+# Lovelace Swipe Card
 
-A Lovelace card that uses [swiper](http://idangero.us/swiper/) to create a touch slider that lets you flick through multiple cards.
-You can use (almost?) all options of swiper, these can be found [here](http://idangero.us/swiper/api/).
+A Lovelace card that uses [Swiper](https://swiperjs.com) to create a touch slider that lets you flick through multiple cards.
 
-## Installation:
-
-You have 2 options, hosted or self hosted (manual). The first option needs internet and will update itself.
-
-# Hosted:
-
-Add the following to resources in your lovelace config:
-
-```yaml
-resources:
-  - url: https://cdn.jsdelivr.net/gh/bramkragten/custom-ui@master/swipe-card/swipe-card.js
-    type: module
-```
-
-# Manual:
-
-Download the [swipe-card.js](https://raw.githubusercontent.com/bramkragten/custom-ui/master/swipe-card/swipe-card.js) to `/config/www/custom-lovelace/swipe-card/`. (or an other folder in `/config/www/`)
-
-Add the following to resources in your lovelace config:
-
-```yaml
-resources:
-  - url: /local/custom-lovelace/swipe-card/swipe-card.js
-    type: module
-```
-
-## Configuration:
-
-And add a card with type `custom:swipe-card`:
+- Works on Home Assistant 2024.11 → 2026.8+ (sections view, per-card `visibility:` conditions)
+- Full visual editor: add, edit, reorder and delete the child cards from the card dialog
+- `start_card` and `reset_after` accept Jinja templates, updated live
+- Nearly every [Swiper parameter](https://swiperjs.com/swiper-api#parameters) can be passed through; Swiper v6 parameter names from old configs are translated automatically
 
 ```yaml
 - type: custom:swipe-card
-  cards: []
+  start_card: "{{ 2 if is_state('binary_sensor.bed_occupied', 'on') else 1 }}"
+  parameters:
+    pagination:
+      clickable: true
+  cards:
+    - type: markdown
+      content: First slide
+    - type: markdown
+      content: Second slide
 ```
