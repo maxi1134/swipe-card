@@ -100,6 +100,17 @@ class SwipeCardEditor extends LitElement {
     return this._config?.cards || [];
   }
 
+  // HA hands config editors the LovelaceConfig (with .views); tolerate
+  // being given the Lovelace wrapper object instead — hui-card-picker
+  // renders blank if it receives the wrapper.
+  get _lovelaceConfig() {
+    const ll = this.lovelace;
+    if (ll && !ll.views && ll.config?.views) {
+      return ll.config;
+    }
+    return ll;
+  }
+
   get _cardEditorEl() {
     return this.shadowRoot?.querySelector("hui-card-element-editor");
   }
@@ -178,7 +189,7 @@ class SwipeCardEditor extends LitElement {
                   <hui-card-element-editor
                     .hass=${this.hass}
                     .value=${this._cards[selected]}
-                    .lovelace=${this.lovelace}
+                    .lovelace=${this._lovelaceConfig}
                     @config-changed=${this._handleChildConfigChanged}
                     @GUImode-changed=${this._handleGUIModeChanged}
                   ></hui-card-element-editor>
@@ -188,7 +199,7 @@ class SwipeCardEditor extends LitElement {
           : html`
               <hui-card-picker
                 .hass=${this.hass}
-                .lovelace=${this.lovelace}
+                .lovelace=${this._lovelaceConfig}
                 @config-changed=${this._handleCardPicked}
               ></hui-card-picker>
             `}
