@@ -25,6 +25,11 @@ const E=globalThis,T=e=>e,M=E.trustedTypes,_=M?M.createPolicy("lit-html",{create
         --swiper-theme-color: var(--primary-color);
         display: block;
         width: 100%;
+        /* A swiper's natural width is the sum of all slides laid side by
+           side; in content-sized layouts (e.g. layout-card grid columns)
+           that blows the column up to thousands of pixels. Inline-size
+           containment makes the card always adopt the width it is given. */
+        contain: inline-size;
       }
       .swiper {
         width: 100%;

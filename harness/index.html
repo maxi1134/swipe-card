@@ -327,6 +327,32 @@ async function run() {
     report("css var set on host", el.style.getPropertyValue("--swipe-card-width") === "180px");
   } catch (e) { report("card_width css var", false, String(e)); }
 
+  /* R9. intrinsic width containment: the card must not blow out
+     content-sized containers (layout-card grid columns, width:max-content) */
+  try {
+    const h2 = document.createElement("h2");
+    h2.textContent = "intrinsic width containment";
+    stage.appendChild(h2);
+    const outer = document.createElement("div");
+    outer.className = "case";
+    outer.style.cssText = "display:grid;grid-template-columns:auto;justify-content:start;max-width:400px;";
+    const el = document.createElement("swipe-card");
+    el.setConfig({ cards: [
+      { type: "markdown", title: "w1", test_height: 60 },
+      { type: "markdown", title: "w2", test_height: 60 },
+      { type: "markdown", title: "w3", test_height: 60 },
+      { type: "markdown", title: "w4", test_height: 60 }
+    ] });
+    el.hass = createMockHass();
+    outer.appendChild(el);
+    stage.appendChild(outer);
+    for (let i = 0; i < 60 && !el.swiper; i++) await sleep(50);
+    await sleep(200);
+    const w = Math.round(el.getBoundingClientRect().width);
+    report("containment: card does not exceed container", w <= 400, `card width ${w}px`);
+    report("containment: no slide-sum blowout", outer.scrollWidth <= 420, `scrollWidth ${outer.scrollWidth}px (blowout would be 1600+)`);
+  } catch (e) { report("intrinsic width containment", false, String(e)); }
+
   /* 17. empty cards config doesn't crash */
   try {
     const el = await makeCard({ cards: [] }, { label: "empty cards" });
