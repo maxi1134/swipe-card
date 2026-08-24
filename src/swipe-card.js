@@ -125,7 +125,7 @@ class SwipeCard extends LitElement {
     if (this._config && this._hass && this._updated && !this._loaded) {
       this._initialLoad();
     } else if (this.swiper) {
-      this.swiper.update();
+      this._updateSwiper();
     }
   }
 
@@ -159,7 +159,7 @@ class SwipeCard extends LitElement {
     if (this._config && this._hass && this.isConnected && !this._loaded) {
       this._initialLoad();
     } else if (this.swiper) {
-      this.swiper.update();
+      this._updateSwiper();
     }
   }
 
@@ -290,13 +290,25 @@ class SwipeCard extends LitElement {
     }
   }
 
+  _updateSwiper() {
+    if (!this.swiper || this.swiper.destroyed) {
+      return;
+    }
+    this.swiper.update();
+    // update() only recomputes autoHeight on slide changes; without this a
+    // child card that grows after load leaves the container at a stale height.
+    if (this.swiper.params.autoHeight) {
+      this.swiper.updateAutoHeight(0);
+    }
+  }
+
   _scheduleSwiperUpdate() {
     if (this._updateTimer) {
       window.clearTimeout(this._updateTimer);
     }
     this._updateTimer = window.setTimeout(() => {
       this._updateTimer = undefined;
-      this.swiper?.update();
+      this._updateSwiper();
     }, 50);
   }
 

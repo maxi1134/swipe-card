@@ -93,7 +93,13 @@ parameters:
   slidesPerView: 1.2
   spaceBetween: 8
   centeredSlides: true
+
+# Dynamic height: the card hugs the active slide instead of the tallest one
+parameters:
+  autoHeight: true
 ```
+
+With `autoHeight: true` the container height follows the slide being shown (animated on swipe) and re-adjusts automatically when a card inside the active slide changes size after loading.
 
 Swiper v6 parameter names from older configs (`slidesPerColumn`, `freeModeMomentum`, `watchSlidesVisibility`, `loopedSlides`, …) are translated automatically; a warning in the browser console tells you the modern name. `lazy`, `preloadImages` and `loopFillGroupWithBlank` no longer exist in Swiper and are ignored.
 

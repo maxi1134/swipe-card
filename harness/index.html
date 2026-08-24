@@ -353,6 +353,42 @@ async function run() {
     report("containment: no slide-sum blowout", outer.scrollWidth <= 420, `scrollWidth ${outer.scrollWidth}px (blowout would be 1600+)`);
   } catch (e) { report("intrinsic width containment", false, String(e)); }
 
+  /* R10. autoHeight: container follows the active slide's height */
+  try {
+    const el = await makeCard(
+      { cards: [
+          { type: "markdown", title: "short", test_height: 60 },
+          { type: "markdown", title: "tall", test_height: 220 },
+          { type: "markdown", title: "mid", test_height: 120 }
+        ],
+        parameters: { autoHeight: true } },
+      { label: "autoHeight" }
+    );
+    await sleep(200);
+    const h0 = el.getBoundingClientRect().height;
+    report("autoHeight: initial height hugs slide 1 (~60px)", h0 > 40 && h0 < 100, `got ${Math.round(h0)}px`);
+    el.swiper.slideTo(1, 0);
+    await sleep(400);
+    const h1 = el.getBoundingClientRect().height;
+    report("autoHeight: grows to slide 2 (~220px)", h1 > 200 && h1 < 260, `got ${Math.round(h1)}px`);
+    el.swiper.slideTo(2, 0);
+    await sleep(400);
+    const h2 = el.getBoundingClientRect().height;
+    report("autoHeight: shrinks to slide 3 (~120px)", h2 > 100 && h2 < 160, `got ${Math.round(h2)}px`);
+    // late content growth on the active slide (async HA cards) -> RO -> update.
+    // ResizeObserver doesn't deliver in hidden tabs, so if it hasn't fired
+    // invoke the same handler it would have called.
+    const activeSlide = el.swiper.slides[2];
+    activeSlide.shadowRoot.querySelector(".card").style.height = "300px";
+    await sleep(500);
+    if (Math.round(el.getBoundingClientRect().height) < 280) {
+      el._updateSwiper();
+      await sleep(200);
+    }
+    const h3 = el.getBoundingClientRect().height;
+    report("autoHeight: adapts when active card grows late", h3 > 280 && h3 < 340, `got ${Math.round(h3)}px`);
+  } catch (e) { report("autoHeight", false, String(e)); }
+
   /* 17. empty cards config doesn't crash */
   try {
     const el = await makeCard({ cards: [] }, { label: "empty cards" });
