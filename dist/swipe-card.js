@@ -186,4 +186,4 @@ const E=globalThis,T=e=>e,M=E.trustedTypes,_=M?M.createPolicy("lit-html",{create
         display: block;
         margin-top: 8px;
       }
-    `}});const Ft="6.0.0";window.customCards=window.customCards||[],window.customCards.push({type:"swipe-card",name:"Swipe Card",description:"A card that lets you swipe through multiple Lovelace cards.",documentationURL:"https://github.com/maxi1134/swipe-card"}),console.info(`%c   SWIPE-CARD  \n%c Version ${Ft} `,"color: orange; font-weight: bold; background: black","color: white; font-weight: bold; background: dimgray");export{Ft as VERSION};
+    `}});const Ft="6.1.0";window.customCards=window.customCards||[],window.customCards.push({type:"swipe-card",name:"Swipe Card",description:"A card that lets you swipe through multiple Lovelace cards.",documentationURL:"https://github.com/maxi1134/swipe-card"}),console.info(`%c   SWIPE-CARD  \n%c Version ${Ft} `,"color: orange; font-weight: bold; background: black","color: white; font-weight: bold; background: dimgray");export{Ft as VERSION};

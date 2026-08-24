@@ -1,3 +1,9 @@
+## 6.1.0
+
+- The Start card field in the visual editor is now a multiline code
+  editor with Jinja syntax highlighting, making templates comfortable
+  to write; plain numbers still round-trip as numbers
+
 ## 6.0.0
 
 - Support Home Assistant 2024.11 → 2026.8+
