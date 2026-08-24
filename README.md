@@ -59,7 +59,9 @@ Add the card from the card picker (search for *Swipe Card*) and use the visual e
 
 ### Templates
 
-`start_card` and `reset_after` accept [Jinja templates](https://www.home-assistant.io/docs/configuration/templating/). The template must render to a number. Results update live when the entities they reference change state:
+`start_card` and `reset_after` accept [Jinja templates](https://www.home-assistant.io/docs/configuration/templating/). The template must render to a number (a 1-based slide index; negative counts from the end). Results update live: when an entity the template references changes state, the card re-evaluates and slides to the new result on its own.
+
+A simple condition:
 
 ```yaml
 - type: custom:swipe-card
@@ -71,6 +73,46 @@ Add the card from the card picker (search for *Swipe Card*) and use the visual e
     - type: markdown
       content: Night dashboard
 ```
+
+A room-following dashboard — one slide per room, driven by a presence/location sensor. The card opens on the slide for the room you are in and follows you around as the sensor changes; unknown values fall back to slide 7:
+
+```yaml
+- type: custom:swipe-card
+  start_card: >
+    {% set rooms = {
+        'salon': '1',
+        'workshop': '2',
+        'kitchen': '3',
+        'bedroom': '4',
+        'patio': '5',
+        'hotbox': '6'
+    } %}
+    {{ rooms.get(states('sensor.maxi_location_by_petro_v2'), '7') }}
+  cards:
+    - type: area # 1 — salon
+      area: salon
+    - type: area # 2 — workshop
+      area: workshop
+    - type: area # 3 — kitchen
+      area: kitchen
+    - type: area # 4 — bedroom
+      area: bedroom
+    - type: area # 5 — patio
+      area: patio
+    - type: area # 6 — hotbox
+      area: hotbox
+    - type: markdown # 7 — fallback
+      content: " "
+```
+
+Combine with `reset_after` to snap back to the location-driven slide after browsing other rooms:
+
+```yaml
+  start_card: "{{ ... }}"
+  reset_after: 30
+```
+
+In the visual editor, the *Start card* field is a multiline code editor with Jinja highlighting, so templates like the one above are comfortable to edit there too.
 
 ### Swiper parameter examples
 
