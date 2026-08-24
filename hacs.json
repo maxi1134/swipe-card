@@ -1,3 +1,6 @@
 {
-  "homeassistant": "0.110.0"
+  "name": "Swipe Card",
+  "filename": "swipe-card.js",
+  "homeassistant": "2024.11.0",
+  "render_readme": true
 }
