@@ -64,6 +64,9 @@ class SwipeCard extends LitElement {
         width: 100%;
         height: 100%;
       }
+      .swiper-slide {
+        width: var(--swipe-card-width, 100%);
+      }
     `;
   }
 
@@ -82,6 +85,14 @@ class SwipeCard extends LitElement {
     this._cards = [];
     this._destroySwiper();
     this._loaded = false;
+    this._resumeIndex = undefined;
+    // Slide width via CSS variable: Swiper clears inline slide widths in
+    // some slidesPerView:auto configurations, a stylesheet rule survives.
+    if (config.card_width) {
+      this.style.setProperty("--swipe-card-width", config.card_width);
+    } else {
+      this.style.removeProperty("--swipe-card-width");
+    }
     if (window.ResizeObserver) {
       this._ro?.disconnect();
       this._ro = new ResizeObserver(() => this._scheduleSwiperUpdate());
@@ -116,6 +127,18 @@ class SwipeCard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._tryDisconnect();
+    // Swiper attaches document-level listeners that only destroy() removes,
+    // so a discarded card would leak them (and its DOM) forever. Defer so a
+    // synchronous re-attach (e.g. Lit moving nodes) doesn't thrash; a real
+    // re-attach later re-initializes via the !_loaded path and resumes at
+    // the slide the user was on.
+    window.setTimeout(() => {
+      if (!this.isConnected && this.swiper) {
+        this._resumeIndex = this.swiper.realIndex ?? this.swiper.activeIndex;
+        this._destroySwiper();
+        this._loaded = false;
+      }
+    }, 0);
   }
 
   updated(changedProperties) {
@@ -147,16 +170,19 @@ class SwipeCard extends LitElement {
     return html`
       <div class="swiper swiper-container" dir="${isRTL ? "rtl" : "ltr"}">
         <div class="swiper-wrapper">${this._cards}</div>
-        ${"pagination" in this._parameters
+        ${"pagination" in this._parameters &&
+        this._parameters.pagination !== false
           ? html`<div class="swiper-pagination"></div>`
           : ""}
-        ${"navigation" in this._parameters
+        ${"navigation" in this._parameters &&
+        this._parameters.navigation !== false
           ? html`
               <div class="swiper-button-next"></div>
               <div class="swiper-button-prev"></div>
             `
           : ""}
-        ${"scrollbar" in this._parameters
+        ${"scrollbar" in this._parameters &&
+        this._parameters.scrollbar !== false
           ? html`<div class="swiper-scrollbar"></div>`
           : ""}
       </div>
@@ -173,11 +199,13 @@ class SwipeCard extends LitElement {
     await this._cardPromises;
     await this._templateReady;
 
-    if (initId !== this._initId || this.swiper || !this.isConnected) {
+    if (initId !== this._initId || this.swiper) {
       return;
     }
     const container = this.shadowRoot.querySelector(".swiper");
-    if (!container) {
+    if (!this.isConnected || !container) {
+      // Detached while we awaited; let connectedCallback re-run init.
+      this._loaded = false;
       return;
     }
 
@@ -187,16 +215,22 @@ class SwipeCard extends LitElement {
       ...sanitizedClone(this._parameters),
     };
 
-    if ("pagination" in parameters) {
-      if (parameters.pagination === null || parameters.pagination === true) {
+    if ("pagination" in parameters && parameters.pagination !== false) {
+      if (
+        typeof parameters.pagination !== "object" ||
+        parameters.pagination === null
+      ) {
         parameters.pagination = {};
       }
       parameters.pagination.el =
         this.shadowRoot.querySelector(".swiper-pagination");
     }
 
-    if ("navigation" in parameters) {
-      if (parameters.navigation === null || parameters.navigation === true) {
+    if ("navigation" in parameters && parameters.navigation !== false) {
+      if (
+        typeof parameters.navigation !== "object" ||
+        parameters.navigation === null
+      ) {
         parameters.navigation = {};
       }
       parameters.navigation.nextEl = this.shadowRoot.querySelector(
@@ -207,15 +241,24 @@ class SwipeCard extends LitElement {
       );
     }
 
-    if ("scrollbar" in parameters) {
-      if (parameters.scrollbar === null || parameters.scrollbar === true) {
+    if ("scrollbar" in parameters && parameters.scrollbar !== false) {
+      if (
+        typeof parameters.scrollbar !== "object" ||
+        parameters.scrollbar === null
+      ) {
         parameters.scrollbar = {};
       }
       parameters.scrollbar.el =
         this.shadowRoot.querySelector(".swiper-scrollbar");
     }
 
-    parameters.initialSlide = this._getStartIndex();
+    if (this._resumeIndex !== undefined) {
+      // Re-attached after a deferred destroy: resume where the user was.
+      parameters.initialSlide = this._resumeIndex;
+      this._resumeIndex = undefined;
+    } else if ("start_card" in this._config) {
+      parameters.initialSlide = this._getStartIndex();
+    }
 
     this.swiper = new Swiper(container, parameters);
 
@@ -254,6 +297,13 @@ class SwipeCard extends LitElement {
 
   _getStartIndex() {
     const count = this._cards?.length || 0;
+    if (!("start_card" in this._config)) {
+      // No start_card: honor a user-supplied native initialSlide parameter.
+      const fallback = Number(this._parameters?.initialSlide);
+      return Number.isFinite(fallback) && count > 0
+        ? Math.max(0, Math.min(count - 1, fallback))
+        : 0;
+    }
     let raw = this._config.start_card;
     if (isTemplate(raw)) {
       raw = this._templateResults.start_card?.result;
@@ -265,6 +315,20 @@ class SwipeCard extends LitElement {
     // 1-based from the start, negative counts from the end (-1 = last).
     const index = n > 0 ? n - 1 : count + n;
     return Math.max(0, Math.min(count - 1, index));
+  }
+
+  _slideToStart() {
+    if (!this.swiper) {
+      return;
+    }
+    const index = this._getStartIndex();
+    // In loop mode slideTo() addresses rotated DOM positions;
+    // slideToLoop() addresses the logical slide index.
+    if (this.swiper.params.loop) {
+      this.swiper.slideToLoop(index);
+    } else {
+      this.swiper.slideTo(index);
+    }
   }
 
   _getResetAfterSeconds() {
@@ -286,7 +350,7 @@ class SwipeCard extends LitElement {
       return;
     }
     this._resetTimer = window.setTimeout(() => {
-      this.swiper?.slideTo(this._getStartIndex());
+      this._slideToStart();
     }, seconds * 1000);
   }
 
@@ -315,14 +379,19 @@ class SwipeCard extends LitElement {
     if (!this._hass || !this._config) {
       return;
     }
-    const value = this._config[key];
-    if (!isTemplate(value)) {
+    const template = this._config[key];
+    if (!isTemplate(template)) {
       return;
     }
+    let sub;
     try {
-      const sub = subscribeRenderTemplate(
+      sub = subscribeRenderTemplate(
         this._hass.connection,
         (result) => {
+          // Ignore late events from a superseded subscription.
+          if (!this._config || this._config[key] !== template) {
+            return;
+          }
           if (result && typeof result === "object" && "error" in result) {
             console.warn(
               `SWIPE-CARD: template error for '${key}':`,
@@ -330,15 +399,16 @@ class SwipeCard extends LitElement {
             );
             return;
           }
+          const prev = this._templateResults[key];
           this._templateResults = { ...this._templateResults, [key]: result };
-          this._onTemplateResult(key);
+          // Re-delivered unchanged values (e.g. websocket reconnects) must
+          // not yank the user back to the start card.
+          const changed = !prev || prev.result !== result.result;
+          this._onTemplateResult(key, changed);
         },
         {
-          template: value,
-          variables: {
-            config: this._config,
-            user: this._hass.user?.name,
-          },
+          template,
+          variables: { user: this._hass.user?.name },
           strict: true,
         }
       );
@@ -346,23 +416,32 @@ class SwipeCard extends LitElement {
       await sub;
     } catch (err) {
       console.warn(`SWIPE-CARD: template for '${key}' failed to render`, err);
-      this._templateResults = {
-        ...this._templateResults,
-        [key]: { result: undefined },
-      };
-      this._unsubRenderTemplates.delete(key);
-      this._onTemplateResult(key);
+      // Only clean up if we still own the slot — a newer subscription may
+      // have replaced this one while we awaited.
+      if (this._unsubRenderTemplates.get(key) === sub) {
+        // Latch the failure so it isn't retried on every hass update;
+        // a config change clears the latch via _tryDisconnectKey.
+        this._unsubRenderTemplates.set(
+          key,
+          Promise.resolve(() => {})
+        );
+        this._templateResults = {
+          ...this._templateResults,
+          [key]: { result: undefined },
+        };
+        this._onTemplateResult(key, true);
+      }
     }
   }
 
-  _onTemplateResult(key) {
+  _onTemplateResult(key, changed) {
     if (key === "start_card") {
       if (this._resolveTemplateReady) {
         this._resolveTemplateReady();
         this._resolveTemplateReady = undefined;
       }
-      if (this.swiper) {
-        this.swiper.slideTo(this._getStartIndex());
+      if (changed) {
+        this._slideToStart();
       }
     }
   }
@@ -447,9 +526,6 @@ class SwipeCard extends LitElement {
       );
     }
     element.classList.add("swiper-slide");
-    if ("card_width" in this._config) {
-      element.style.width = this._config.card_width;
-    }
     element.addEventListener("card-visibility-changed", () =>
       this._scheduleSwiperUpdate()
     );

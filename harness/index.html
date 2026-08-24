@@ -17,6 +17,12 @@
 <div id="results"><div id="summary">running…</div><div id="details"></div></div>
 <div id="stage"></div>
 
+<script>
+// The harness may run in a hidden/background tab where requestAnimationFrame
+// never fires; Swiper's slideToLoop defers through rAF, so make it
+// deterministic for the tests.
+window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), 16);
+</script>
 <script type="module">
 import { createMockHass } from "./mock-hass.js";
 import "../dist/swipe-card.js";
@@ -222,6 +228,104 @@ async function run() {
     await sleep(1700);
     report("reset_after template: returns to start index 2", el.swiper?.activeIndex === 2, `got ${el.swiper?.activeIndex}`);
   } catch (e) { report("reset_after template", false, String(e)); }
+
+  /* R1. pagination/navigation false must not crash (v14 accepts false) */
+  try {
+    const el = await makeCard(
+      { cards: cards3, parameters: { pagination: false, navigation: false } },
+      { label: "pagination:false" }
+    );
+    report("pagination:false: swiper inits", Boolean(el.swiper));
+    report("pagination:false: no pagination div", !el.shadowRoot.querySelector(".swiper-pagination"));
+  } catch (e) { report("pagination:false", false, String(e)); }
+
+  /* R2. scalar parameters must not crash */
+  try {
+    const el = await makeCard(
+      { cards: cards3, parameters: "effect coverflow" },
+      { label: "scalar parameters" }
+    );
+    report("scalar parameters ignored, card works", Boolean(el.swiper) && el.swiper.slides.length === 3);
+  } catch (e) { report("scalar parameters", false, String(e)); }
+
+  /* R3. user-supplied initialSlide honored when start_card absent */
+  try {
+    const el = await makeCard(
+      { cards: cards3, parameters: { initialSlide: 2 } },
+      { label: "native initialSlide" }
+    );
+    report("native initialSlide honored", el.swiper?.activeIndex === 2, `got ${el.swiper?.activeIndex}`);
+  } catch (e) { report("native initialSlide", false, String(e)); }
+
+  /* R4. detach destroys swiper (deferred), reattach re-inits and resumes position */
+  try {
+    const el = await makeCard({ cards: cards3 }, { label: "detach/reattach" });
+    const first = el.swiper;
+    el.swiper.slideTo(2);
+    await sleep(100);
+    const parent = el.parentElement;
+    el.remove();
+    await sleep(150); // deferred destroy fires
+    report("detach: swiper destroyed", first.destroyed === true, `destroyed=${first.destroyed}`);
+    parent.appendChild(el);
+    for (let i = 0; i < 80 && (!el.swiper || el.swiper === first); i++) await sleep(50);
+    report("reattach: new swiper created", Boolean(el.swiper) && el.swiper !== first);
+    report("reattach: resumes at slide 2", el.swiper?.activeIndex === 2, `got ${el.swiper?.activeIndex}`);
+  } catch (e) { report("detach/reattach", false, String(e)); }
+
+  /* R5. unchanged template re-delivery must not yank the user back */
+  try {
+    const tpl = "{{ states('sensor.startslide') }}";
+    window.__templateResults[tpl] = 1;
+    const el = await makeCard({ cards: cards3, start_card: tpl }, { label: "template no-yank" });
+    report("no-yank: starts at 0", el.swiper?.activeIndex === 0, `got ${el.swiper?.activeIndex}`);
+    el.swiper.slideTo(2);
+    await sleep(100);
+    window.__pushTemplateUpdates(); // same value re-delivered
+    await sleep(300);
+    report("no-yank: stays at 2 on unchanged result", el.swiper?.activeIndex === 2, `got ${el.swiper?.activeIndex}`);
+    window.__templateResults[tpl] = 2;
+    window.__pushTemplateUpdates(); // changed value → should move
+    await sleep(400);
+    report("no-yank: moves on changed result", el.swiper?.activeIndex === 1, `got ${el.swiper?.activeIndex}`);
+  } catch (e) { report("template no-yank", false, String(e)); }
+
+  /* R6. loop mode: template update uses logical index (slideToLoop) */
+  try {
+    const tpl = "{{ states('sensor.loopslide') }}";
+    window.__templateResults[tpl] = 1;
+    const el = await makeCard(
+      { cards: cards3, start_card: tpl, parameters: { loop: true } },
+      { label: "loop + template" }
+    );
+    window.__templateResults[tpl] = 3;
+    window.__pushTemplateUpdates();
+    await sleep(500);
+    report("loop: realIndex follows logical slide", el.swiper?.realIndex === 2, `realIndex=${el.swiper?.realIndex}`);
+  } catch (e) { report("loop + template", false, String(e)); }
+
+  /* R7. failing template is latched, not retried on every hass set */
+  try {
+    const el = await makeCard({ cards: cards3, start_card: "{{ broken" }, { label: "template latch" });
+    await sleep(300);
+    const callsAfterInit = window.__templateSubscribeCalls;
+    el.hass = createMockHass();
+    el.hass = createMockHass();
+    await sleep(300);
+    report("failed template not resubscribed on hass updates",
+      window.__templateSubscribeCalls === callsAfterInit, `calls ${callsAfterInit} -> ${window.__templateSubscribeCalls}`);
+  } catch (e) { report("template latch", false, String(e)); }
+
+  /* R8. card_width via CSS var still applies */
+  try {
+    const el = await makeCard(
+      { cards: cards3, card_width: "180px", parameters: { slidesPerView: "auto" } },
+      { label: "card_width css var" }
+    );
+    const w = el.swiper?.slides?.[0]?.getBoundingClientRect()?.width;
+    report("card_width css var applied", Math.round(w) === 180, `got ${w}px`);
+    report("css var set on host", el.style.getPropertyValue("--swipe-card-width") === "180px");
+  } catch (e) { report("card_width css var", false, String(e)); }
 
   /* 17. empty cards config doesn't crash */
   try {

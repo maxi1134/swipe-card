@@ -111,6 +111,13 @@ export function createMockHass(overrides = {}) {
     connection: {
       subscribeMessage(callback, msg) {
         window.__templateSubscribeCalls++;
+        // Simulate a server-side compile error (strict mode / syntax error).
+        if (msg.type === "render_template" && /broken/.test(msg.template)) {
+          return Promise.reject({
+            code: "template_error",
+            message: "mock compile error",
+          });
+        }
         const sub = { callback, msg, active: true };
         window.__templateSubscriptions.push(sub);
         // Deliver initial result async, like the real websocket does.

@@ -48,7 +48,17 @@ const warnParam = (oldName, replacement) => {
 // Translates Swiper v6 parameter names (what existing dashboards use) to the
 // current Swiper API so old YAML keeps working after the upgrade.
 export function normalizeParameters(parameters) {
-  const params = sanitizedClone(parameters) || {};
+  const cloned = sanitizedClone(parameters);
+  if (cloned !== undefined && cloned !== null) {
+    if (typeof cloned !== "object" || Array.isArray(cloned)) {
+      console.warn(
+        "SWIPE-CARD: 'parameters' must be a mapping of Swiper options; ignoring",
+        parameters
+      );
+      return {};
+    }
+  }
+  const params = cloned || {};
 
   if ("slidesPerColumn" in params) {
     params.grid = { rows: params.slidesPerColumn, ...(params.grid || {}) };
@@ -56,7 +66,7 @@ export function normalizeParameters(parameters) {
     warnParam("slidesPerColumn", "grid.rows");
   }
   if ("slidesPerColumnFill" in params) {
-    params.grid = { ...(params.grid || {}), fill: params.slidesPerColumnFill };
+    params.grid = { fill: params.slidesPerColumnFill, ...(params.grid || {}) };
     delete params.slidesPerColumnFill;
     warnParam("slidesPerColumnFill", "grid.fill");
   }

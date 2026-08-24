@@ -43,6 +43,7 @@ class SwipeCardEditor extends LitElement {
       _GUImode: { state: true },
       _guiModeAvailable: { state: true },
       _editorComponentsReady: { state: true },
+      _editorLoadFailed: { state: true },
     };
   }
 
@@ -78,7 +79,17 @@ class SwipeCardEditor extends LitElement {
       // registers them (the standard trick used by custom cards in 2026).
       const helpers = await window.loadCardHelpers?.();
       helpers?.createCardElement({ type: "vertical-stack", cards: [] });
-      await customElements.whenDefined("hui-vertical-stack-card");
+      // whenDefined never rejects — bound the wait so a failed chunk load
+      // doesn't leave the editor on "Loading…" forever.
+      await Promise.race([
+        customElements.whenDefined("hui-vertical-stack-card"),
+        new Promise((_resolve, reject) => {
+          window.setTimeout(
+            () => reject(new Error("timed out loading editor components")),
+            5000
+          );
+        }),
+      ]);
       await customElements.get("hui-vertical-stack-card").getConfigElement();
       if (!customElements.get("ha-form")) {
         customElements.get("hui-tile-card")?.getConfigElement();
@@ -87,6 +98,7 @@ class SwipeCardEditor extends LitElement {
       console.warn("SWIPE-CARD: failed to preload editor components", err);
     }
     this._editorComponentsReady = this._componentsReady();
+    this._editorLoadFailed = !this._editorComponentsReady;
   }
 
   setConfig(config) {
@@ -94,6 +106,12 @@ class SwipeCardEditor extends LitElement {
       throw new Error("Card config incorrect");
     }
     this._config = { ...config, cards: config.cards || [] };
+    // An external config (undo, YAML edits) can have fewer cards than the
+    // selected tab index; clamping to length lands on the "add card" tab.
+    this._selectedCard = Math.min(
+      this._selectedCard,
+      this._config.cards.length
+    );
   }
 
   get _cards() {
@@ -155,7 +173,11 @@ class SwipeCardEditor extends LitElement {
         </div>
       </div>
       ${!this._editorComponentsReady
-        ? html`<div class="loading">Loading editor…</div>`
+        ? html`<div class="loading">
+            ${this._editorLoadFailed
+              ? "Could not load the Home Assistant card editor components — edit the cards in YAML mode instead."
+              : "Loading editor…"}
+          </div>`
         : selected < numcards
           ? html`
               <div id="card-options">
@@ -217,8 +239,14 @@ class SwipeCardEditor extends LitElement {
       const raw = value[key];
       if (raw === "" || raw === undefined || raw === null) {
         delete value[key];
-      } else if (typeof raw === "string" && NUMERIC.test(raw.trim())) {
-        value[key] = Number(raw.trim());
+      } else if (typeof raw === "string") {
+        // Only coerce canonical numbers ("2", "-1"); anything else (a
+        // template, or a mid-typing state like "2.") stays verbatim so the
+        // text field is never rewritten under the user's cursor.
+        const trimmed = raw.trim();
+        if (NUMERIC.test(trimmed) && String(Number(trimmed)) === trimmed) {
+          value[key] = Number(trimmed);
+        }
       }
     }
     if (value.card_width === "" || value.card_width === undefined) {
