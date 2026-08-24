@@ -10,7 +10,7 @@ const fireEvent = (node, type, detail = {}) =>
 const NUMERIC = /^-?\d+(\.\d+)?$/;
 
 const SCHEMA = [
-  { name: "start_card", selector: { text: {} } },
+  { name: "start_card", selector: { template: {} } },
   { name: "reset_after", selector: { text: {} } },
   { name: "card_width", selector: { text: {} } },
   { name: "parameters", selector: { object: {} } },
@@ -133,6 +133,15 @@ class SwipeCardEditor extends LitElement {
     return this.shadowRoot?.querySelector("hui-card-element-editor");
   }
 
+  // The template selector's code editor requires a string value; configs
+  // written by hand may hold a plain number.
+  get _formData() {
+    if (typeof this._config?.start_card === "number") {
+      return { ...this._config, start_card: String(this._config.start_card) };
+    }
+    return this._config;
+  }
+
   render() {
     if (!this.hass || !this._config) {
       return html``;
@@ -144,7 +153,7 @@ class SwipeCardEditor extends LitElement {
     return html`
       <ha-form
         .hass=${this.hass}
-        .data=${this._config}
+        .data=${this._formData}
         .schema=${SCHEMA}
         .computeLabel=${this._computeLabel}
         .computeHelper=${this._computeHelper}
@@ -237,7 +246,11 @@ class SwipeCardEditor extends LitElement {
     const value = { ...ev.detail.value };
     for (const key of ["start_card", "reset_after"]) {
       const raw = value[key];
-      if (raw === "" || raw === undefined || raw === null) {
+      if (
+        raw === undefined ||
+        raw === null ||
+        (typeof raw === "string" && raw.trim() === "")
+      ) {
         delete value[key];
       } else if (typeof raw === "string") {
         // Only coerce canonical numbers ("2", "-1"); anything else (a
